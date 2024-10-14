@@ -4,8 +4,9 @@
 #include <cstdint>   // For std::uint64_t
 
 void generateTestData(std::vector<int>& A, std::vector<int>& B, std::uint64_t N) {
-    // Random number generator with a fixed seed for reproducibility
-    std::mt19937 rng(42);
+    // Random number generator
+    static std::random_device rd;
+    static std::mt19937 rng{rd()};
     std::uniform_int_distribution<int> distA(0, 1000000);
 
     // Resize vector A to hold N elements
