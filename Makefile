@@ -7,7 +7,7 @@ NVCC = nvcc
 CXXFLAGS = -std=c++11 -O2
 
 # Compute capability
-ARCH_FLAGS = -arch=sm_70  # 如果是T4, sm_70，如果是P100, 改成 sm_60
+ARCH_FLAGS = -arch=sm_89
 
 SRC = main.cpp data_generator.cpp cpu_sorter.cpp performance_timer.cpp \
       gpu_reference_sorter.cu gpu_custom_sorter.cu
