@@ -91,11 +91,11 @@ int main() {
                   << ", A[" << i << "] = " << A_sorted_cpu[i] << "\n";
     }
 
-    // Output first 10 sorted elements from GPU Thrust sorter
+    // Output first 10 sorted elements from shared memory bitonic sorter
     std::cout << "\nFirst 10 sorted elements from GPU Thrust sorter:\n";
     for (std::uint64_t i = 0; i < 10; ++i) {
-        std::cout << "B[" << i << "] = " << B_sorted_gpu_ref[i]
-                  << ", A[" << i << "] = " << A_sorted_gpu_ref[i] << "\n";
+        std::cout << "B[" << i << "] = " << B_sorted_bitonic_shared[i]
+                  << ", A[" << i << "] = " << A_sorted_bitonic_shared[i] << "\n";
     }
 
     // Output first 10 sorted elements from GPU radix sorter
