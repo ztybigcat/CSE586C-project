@@ -39,7 +39,7 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
 int main() {
     // Size of the arrays
-    const std::uint64_t N = 129; // 1 million elements
+    const std::uint64_t N = 257; // 1 million elements
 
     // Generate test data
     std::vector<int> A;
