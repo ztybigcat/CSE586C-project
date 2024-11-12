@@ -32,7 +32,7 @@ void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
     CUDA_CHECK(cudaMemcpy(d_values_in, A.data(), N * sizeof(int), cudaMemcpyHostToDevice));
 
     // Allocate memory for histograms
-    int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    int numBlocks = ceil(static_cast<double>(N) / BLOCK_SIZE);
     int* d_histograms;
     CUDA_CHECK(cudaMalloc(&d_histograms, numBlocks * RADIX * sizeof(int)));
 
@@ -149,25 +149,32 @@ __global__ void histogramKernel(const int* keys, int* histograms, int n, int bit
 __global__ void reorderKernel(const int* keys_in, const int* values_in, int* keys_out, int* values_out,
                               const int* blockOffsets, int n, int bitOffset) {
     __shared__ int digitCounters[RADIX];
-    if (threadIdx.x < RADIX) {
-        digitCounters[threadIdx.x] = 0;
+    
+    // Initialize shared memory
+    for (int i = threadIdx.x; i < RADIX; i += blockDim.x) {
+        digitCounters[i] = 0;
     }
     __syncthreads();
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    // Handle the last block specially
     if (idx < n) {
         int key = keys_in[idx];
         int value = values_in[idx];
         int digit = getDigit(key, bitOffset);
 
-        // Compute local position within the digit group
-        int localPos = atomicAdd(&digitCounters[digit], 1);
-
-        // Compute global position
-        int pos = blockOffsets[blockIdx.x * RADIX + digit] + localPos;
-
-        // Write to output arrays
-        keys_out[pos] = key;
-        values_out[pos] = value;
+        // Calculate elements in this block
+        int block_start = blockIdx.x * blockDim.x;
+        int block_size = min(blockDim.x, n - block_start);
+        
+        // Ensure proper counting within partial blocks
+        if (threadIdx.x < block_size) {
+            int localPos = atomicAdd(&digitCounters[digit], 1);
+            int pos = blockOffsets[blockIdx.x * RADIX + digit] + localPos;
+            
+            keys_out[pos] = key;
+            values_out[pos] = value;
+        }
     }
 }
