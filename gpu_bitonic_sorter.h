@@ -20,13 +20,15 @@
     }
 
 // Define block size for kernels
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 1024
 
 // Function declarations
 void sortDataGPU_bitonic(const std::vector<int>& A, const std::vector<int>& B,
                          std::vector<int>& A_sorted, std::vector<int>& B_sorted);
 
 void sortDataGPU_bitonic_shared_memory(const std::vector<int>& A, const std::vector<int>& B,
+                                       std::vector<int>& A_sorted, std::vector<int>& B_sorted);
+void sortDataGPU_bitonic_Hybrid(const std::vector<int>& A, const std::vector<int>& B,
                                        std::vector<int>& A_sorted, std::vector<int>& B_sorted);
 
 #endif // GPU_BITONIC_SORTER_H
