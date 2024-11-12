@@ -32,31 +32,20 @@ __global__ void histogramKernel(const int* keys, int* histograms, int n, int bit
     }
 }
 
-// Modified reorder kernel with proper index handling
 __global__ void reorderKernel(const int* keys_in, const int* values_in, int* keys_out, int* values_out,
-                              const int* blockOffsets, int n, int bitOffset) {
-    __shared__ int digitCounters[RADIX];
+                              const int* digitOffsets, int n, int bitOffset) {
+    // Use global offsets directly instead of shared memory
+    // since we need atomic operations to work across blocks
     
-    // Initialize shared memory
-    for (int i = threadIdx.x; i < RADIX; i += blockDim.x) {
-        digitCounters[i] = 0;
-    }
-    __syncthreads();
-
-    // Process multiple elements per thread if needed
     for (int idx = blockIdx.x * blockDim.x + threadIdx.x; idx < n; idx += blockDim.x * gridDim.x) {
         int key = keys_in[idx];
         int value = values_in[idx];
         int digit = getDigit(key, bitOffset);
-
-        // Get local position within this block for this digit
-        int localPos = atomicAdd(&digitCounters[digit], 1);
         
-        // Calculate global position
-        int globalPos = blockOffsets[blockIdx.x * RADIX + digit] + localPos;
+        // Use global memory atomic operation
+        int globalPos = atomicAdd((int*)&digitOffsets[digit], 1);
         
-        // Write to output arrays
-        if (globalPos < n) {  // Add bounds check
+        if (globalPos < n) {
             keys_out[globalPos] = key;
             values_out[globalPos] = value;
         }
@@ -85,7 +74,7 @@ void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
 
     // Calculate grid dimensions
     int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    numBlocks = min(numBlocks, 1024);  // Limit number of blocks to avoid excessive memory usage
+    numBlocks = min(numBlocks, 1024);  // Limit number of blocks
     
     // Allocate memory for histograms
     int* d_histograms;
@@ -116,32 +105,22 @@ void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
             }
         }
 
-        // Step 3: Compute exclusive prefix sum
+        // Compute digit offsets
+        std::vector<int> h_digitOffsets(RADIX);
         int total = 0;
         for (int i = 0; i < RADIX; ++i) {
-            int temp = h_globalHistogram[i];
-            h_globalHistogram[i] = total;
-            total += temp;
+            h_digitOffsets[i] = total;
+            total += h_globalHistogram[i];
         }
 
-        // Compute block offsets
-        std::vector<int> h_blockOffsets(numBlocks * RADIX);
-        for (int d = 0; d < RADIX; ++d) {
-            int sum = h_globalHistogram[d];
-            for (int b = 0; b < numBlocks; ++b) {
-                h_blockOffsets[b * RADIX + d] = sum;
-                sum += h_histograms[b * RADIX + d];
-            }
-        }
+        // Copy digit offsets to device and make them mutable
+        int* d_digitOffsets;
+        CUDA_CHECK(cudaMalloc(&d_digitOffsets, RADIX * sizeof(int)));
+        CUDA_CHECK(cudaMemcpy(d_digitOffsets, h_digitOffsets.data(), RADIX * sizeof(int), cudaMemcpyHostToDevice));
 
-        // Copy block offsets to device
-        int* d_blockOffsets;
-        CUDA_CHECK(cudaMalloc(&d_blockOffsets, numBlocks * RADIX * sizeof(int)));
-        CUDA_CHECK(cudaMemcpy(d_blockOffsets, h_blockOffsets.data(), numBlocks * RADIX * sizeof(int), cudaMemcpyHostToDevice));
-
-        // Step 4: Reorder elements
+        // Step 3: Reorder elements
         reorderKernel<<<numBlocks, BLOCK_SIZE>>>(d_keys_in, d_values_in, d_keys_out, d_values_out,
-                                                 d_blockOffsets, N, bitOffset);
+                                                 d_digitOffsets, N, bitOffset);
         CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -149,7 +128,7 @@ void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
         std::swap(d_keys_in, d_keys_out);
         std::swap(d_values_in, d_values_out);
 
-        CUDA_CHECK(cudaFree(d_blockOffsets));
+        CUDA_CHECK(cudaFree(d_digitOffsets));
     }
 
     // Copy sorted data back to host
