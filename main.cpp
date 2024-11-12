@@ -39,7 +39,7 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
 int main() {
     // Size of the arrays
-    const std::uint64_t N = 1000000; // 1 million elements
+    const std::uint64_t N = 16; // 1 million elements
 
     // Generate test data
     std::vector<int> A;
@@ -92,7 +92,7 @@ int main() {
     }
 
     // Output first 10 sorted elements from shared memory bitonic sorter
-    std::cout << "\nFirst 10 sorted elements from GPU Thrust sorter:\n";
+    std::cout << "\nFirst 10 sorted elements from shared memory bitonic sorter:\n";
     for (std::uint64_t i = 0; i < 10; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_bitonic_shared[i]
                   << ", A[" << i << "] = " << A_sorted_bitonic_shared[i] << "\n";
