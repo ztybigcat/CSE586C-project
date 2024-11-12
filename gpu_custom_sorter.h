@@ -14,6 +14,6 @@ void sortDataGPU_bitonic(const std::vector<int>& A, const std::vector<int>& B,
 
 // radix sort
 void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
-                       std::vector<int>& A_sorted, std::vector<int>& B_sorted)
+                       std::vector<int>& A_sorted, std::vector<int>& B_sorted);
 
 #endif // GPU_CUSTOM_SORTER_H

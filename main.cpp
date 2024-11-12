@@ -7,8 +7,8 @@
 #include "data_generator.h"
 #include "cpu_sorter.h"
 #include "gpu_reference_sorter.h"
-#include "gpu_custom_sorter.h"
-#include "performance_timer.h"
+#include "gpu_bitonic_sorter.h"
+#include "gpu_radix_sorter.h"
 
 // Function to time GPU execution
 float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const std::vector<int>&, std::vector<int>&, std::vector<int>&),
@@ -39,7 +39,7 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
 int main() {
     // Size of the arrays
-    const std::uint64_t N = 10000000; // 10 million elements
+    const std::uint64_t N = 1000; // 1 million elements
 
     // Generate test data
     std::vector<int> A;
@@ -62,24 +62,10 @@ int main() {
     std::vector<int> A_sorted_radix;
     std::vector<int> B_sorted_radix;
 
-    // Measure performance for CPU sorting
-    PerformanceTimer timer_cpu;
-    timer_cpu.start();
-
-    // CPU sorting
+    // Perform CPU sorting
+    std::cout << "Starting CPU sorting..." << std::endl;
     sortDataCPU(A, B, A_sorted_cpu, B_sorted_cpu);
-
-    timer_cpu.stop();
-    std::cout << "CPU sorting completed in " << timer_cpu.getElapsedSeconds() * 1000 << " ms.\n";
-
-    // GPU reference sorting
-    PerformanceTimer timer_gpu_ref;
-    timer_gpu_ref.start();
-
-    sortDataGPU_reference(A, B, A_sorted_gpu_ref, B_sorted_gpu_ref);
-
-    timer_gpu_ref.stop();
-    std::cout << "GPU reference sorting completed in " << timer_gpu_ref.getElapsedSeconds() * 1000 << " ms.\n";
+    std::cout << "CPU sorting completed." << std::endl;
 
     // GPU bitonic sorting
     float bitonic_gpu_time = timeGPUExecution(sortDataGPU_bitonic, A, B, A_sorted_bitonic, B_sorted_bitonic);

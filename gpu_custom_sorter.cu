@@ -350,12 +350,7 @@ __global__ void reorderKernel(const int* keys_in, const int* values_in, int* key
     }
 }
 
-// Device function to get digit
-__device__ __forceinline__ int getDigit(int key, int bitOffset) {
-    return (key >> bitOffset) & (RADIX - 1);
-}
-
-// Original Bitonic Sort Kernel
+// Bitonic Sort Kernel
 __global__ void bitonicSortKernel(int* d_keys, int* d_values, int N, int stage, int passOfStage) {
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N) return;

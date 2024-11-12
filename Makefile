@@ -9,12 +9,14 @@ CXXFLAGS = -std=c++11 -O2
 # Compute capability
 ARCH_FLAGS = -arch=sm_89
 
-SRC = main.cpp data_generator.cpp cpu_sorter.cpp performance_timer.cpp \
-      gpu_reference_sorter.cu gpu_custom_sorter.cu
+SRC = main.cpp data_generator.cpp cpu_sorter.cpp \
+      gpu_reference_sorter.cu gpu_bitonic_sorter.cu \
+	  gpu_radix_sorter.cu
 
 # Header files
-HEADERS = data_generator.h cpu_sorter.h performance_timer.h \
-          gpu_reference_sorter.h gpu_custom_sorter.h
+HEADERS = data_generator.h cpu_sorter.h \
+          gpu_reference_sorter.h gpu_bitonic_sorter.h \
+		  gpu_radix_sorter.h
 
 # Executable name
 EXEC = sort_program
