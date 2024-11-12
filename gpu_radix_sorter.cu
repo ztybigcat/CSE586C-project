@@ -4,7 +4,7 @@
 // Function prototypes for kernels
 __global__ void histogramKernel(const int* keys, int* histograms, int n, int bitOffset);
 __global__ void reorderKernel(const int* keys_in, const int* values_in, int* keys_out, int* values_out,
-                              const int* globalHistogram, int n, int bitOffset);
+                              const int* blockOffsets, int n, int bitOffset);
 
 // Device function to get digit
 __device__ __forceinline__ int getDigit(int key, int bitOffset) {
@@ -65,21 +65,31 @@ void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
         }
 
         // Step 3: Compute exclusive prefix sum (scan) on global histogram
-        int sum = 0;
+        int total = 0;
         for (int i = 0; i < RADIX; ++i) {
             int temp = h_globalHistogram[i];
-            h_globalHistogram[i] = sum;
-            sum += temp;
+            h_globalHistogram[i] = total;
+            total += temp;
         }
 
-        // Copy global histogram back to device
-        int* d_globalHistogram;
-        CUDA_CHECK(cudaMalloc(&d_globalHistogram, RADIX * sizeof(int)));
-        CUDA_CHECK(cudaMemcpy(d_globalHistogram, h_globalHistogram, RADIX * sizeof(int), cudaMemcpyHostToDevice));
+        // Compute block offsets
+        int* h_blockOffsets = new int[numBlocks * RADIX];
+        for (int d = 0; d < RADIX; ++d) {
+            int sum = h_globalHistogram[d];
+            for (int b = 0; b < numBlocks; ++b) {
+                h_blockOffsets[b * RADIX + d] = sum;
+                sum += h_histograms[b * RADIX + d];
+            }
+        }
+
+        // Copy block offsets to device
+        int* d_blockOffsets;
+        CUDA_CHECK(cudaMalloc(&d_blockOffsets, numBlocks * RADIX * sizeof(int)));
+        CUDA_CHECK(cudaMemcpy(d_blockOffsets, h_blockOffsets, numBlocks * RADIX * sizeof(int), cudaMemcpyHostToDevice));
 
         // Step 4: Reorder elements based on computed indices
         reorderKernel<<<numBlocks, BLOCK_SIZE>>>(d_keys_in, d_values_in, d_keys_out, d_values_out,
-                                                 d_globalHistogram, N, bitOffset);
+                                                 d_blockOffsets, N, bitOffset);
         CUDA_CHECK(cudaGetLastError());
         CUDA_CHECK(cudaDeviceSynchronize());
 
@@ -90,7 +100,8 @@ void sortDataGPU_radix(const std::vector<int>& A, const std::vector<int>& B,
         // Clean up
         delete[] h_histograms;
         delete[] h_globalHistogram;
-        CUDA_CHECK(cudaFree(d_globalHistogram));
+        delete[] h_blockOffsets;
+        CUDA_CHECK(cudaFree(d_blockOffsets));
     }
 
     // Copy sorted data back to host
@@ -136,55 +147,27 @@ __global__ void histogramKernel(const int* keys, int* histograms, int n, int bit
 
 // Kernel to reorder elements based on computed indices
 __global__ void reorderKernel(const int* keys_in, const int* values_in, int* keys_out, int* values_out,
-                              const int* globalHistogram, int n, int bitOffset) {
-    __shared__ int localHist[RADIX];
-    __shared__ int localScan[RADIX];
-
-    int tid = threadIdx.x;
-    int idx = blockIdx.x * blockDim.x + tid;
-
-    // Initialize local histogram
-    for (int i = tid; i < RADIX; i += blockDim.x) {
-        localHist[i] = 0;
+                              const int* blockOffsets, int n, int bitOffset) {
+    __shared__ int digitCounters[RADIX];
+    if (threadIdx.x < RADIX) {
+        digitCounters[threadIdx.x] = 0;
     }
     __syncthreads();
 
-    // Build local histogram
-    if (idx < n) {
-        int key = keys_in[idx];
-        int digit = getDigit(key, bitOffset);
-        atomicAdd(&localHist[digit], 1);
-    }
-    __syncthreads();
-
-    // Compute exclusive scan on local histogram
-    if (tid < RADIX) {
-        int sum = 0;
-        for (int i = 0; i < tid; ++i) {
-            sum += localHist[i];
-        }
-        localScan[tid] = sum;
-    }
-    __syncthreads();
-
-    // Compute base address for each digit
-    __shared__ int base[RADIX];
-    if (tid < RADIX) {
-        base[tid] = globalHistogram[tid];
-    }
-    __syncthreads();
-
-    // Write elements to output array
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
         int key = keys_in[idx];
         int value = values_in[idx];
         int digit = getDigit(key, bitOffset);
 
-        int pos = base[digit] + localScan[digit] + tid - localScan[digit];
+        // Compute local position within the digit group
+        int localPos = atomicAdd(&digitCounters[digit], 1);
 
+        // Compute global position
+        int pos = blockOffsets[blockIdx.x * RADIX + digit] + localPos;
+
+        // Write to output arrays
         keys_out[pos] = key;
         values_out[pos] = value;
-
-        atomicAdd(&base[digit], 1);
     }
 }
