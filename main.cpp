@@ -86,21 +86,21 @@ int main() {
 
     // Output first 10 sorted elements for verification
     std::cout << "\nFirst 10 sorted elements from CPU:\n";
-    for (std::uint64_t i = 0; i < 16; ++i) {
+    for (std::uint64_t i = 0; i < 33; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_cpu[i]
                   << ", A[" << i << "] = " << A_sorted_cpu[i] << "\n";
     }
 
     // Output first 10 sorted elements from shared memory bitonic sorter
     std::cout << "\nFirst 10 sorted elements from shared memory bitonic sorter:\n";
-    for (std::uint64_t i = 0; i < 16; ++i) {
+    for (std::uint64_t i = 0; i < 33; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_bitonic_shared[i]
                   << ", A[" << i << "] = " << A_sorted_bitonic_shared[i] << "\n";
     }
 
     // Output first 10 sorted elements from GPU radix sorter
     std::cout << "\nFirst 10 sorted elements from GPU radix sorter:\n";
-    for (std::uint64_t i = 0; i < 16; ++i) {
+    for (std::uint64_t i = 0; i < 33; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_radix[i]
                   << ", A[" << i << "] = " << A_sorted_radix[i] << "\n";
     }
