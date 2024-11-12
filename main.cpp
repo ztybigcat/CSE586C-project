@@ -39,7 +39,7 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
 int main() {
     // Size of the arrays
-    const std::uint64_t N = 1000; // 1 million elements
+    const std::uint64_t N = 1000000; // 1 million elements
 
     // Generate test data
     std::vector<int> A;
@@ -67,6 +67,11 @@ int main() {
     sortDataCPU(A, B, A_sorted_cpu, B_sorted_cpu);
     std::cout << "CPU sorting completed." << std::endl;
 
+    // Perform GPU Thrust sorting
+    std::cout << "Starting GPU Thrust sorting..." << std::endl;
+    float thrust_gpu_time = timeGPUExecution(sortDataGPU_reference, A, B, A_sorted_gpu_ref, B_sorted_gpu_ref);
+    std::cout << "GPU Thrust sorting completed in " << thrust_gpu_time << " ms.\n";
+
     // GPU bitonic sorting
     float bitonic_gpu_time = timeGPUExecution(sortDataGPU_bitonic, A, B, A_sorted_bitonic, B_sorted_bitonic);
     std::cout << "GPU bitonic sorting completed in " << bitonic_gpu_time << " ms.\n";
@@ -80,14 +85,21 @@ int main() {
     std::cout << "GPU radix sorting completed in " << radix_gpu_time << " ms.\n";
 
     // Output first 10 sorted elements for verification
-    std::cout << "First 10 sorted elements from CPU:\n";
+    std::cout << "\nFirst 10 sorted elements from CPU:\n";
     for (std::uint64_t i = 0; i < 10; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_cpu[i]
                   << ", A[" << i << "] = " << A_sorted_cpu[i] << "\n";
     }
 
+    // Output first 10 sorted elements from GPU Thrust sorter
+    std::cout << "\nFirst 10 sorted elements from GPU Thrust sorter:\n";
+    for (std::uint64_t i = 0; i < 10; ++i) {
+        std::cout << "B[" << i << "] = " << B_sorted_gpu_ref[i]
+                  << ", A[" << i << "] = " << A_sorted_gpu_ref[i] << "\n";
+    }
+
     // Output first 10 sorted elements from GPU radix sorter
-    std::cout << "First 10 sorted elements from GPU radix sorter:\n";
+    std::cout << "\nFirst 10 sorted elements from GPU radix sorter:\n";
     for (std::uint64_t i = 0; i < 10; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_radix[i]
                   << ", A[" << i << "] = " << A_sorted_radix[i] << "\n";
@@ -145,6 +157,24 @@ int main() {
         std::cout << "Verification passed: CPU and GPU bitonic shared memory sort results match.\n";
     } else {
         std::cout << "Verification failed: CPU and GPU bitonic shared memory sort results do not match.\n";
+    }
+
+    // Verify that the CPU and GPU Thrust sort results are the same
+    bool is_correct_thrust = true;
+    for (std::uint64_t i = 0; i < N; ++i) {
+        if (B_sorted_cpu[i] != B_sorted_gpu_ref[i] || A_sorted_cpu[i] != A_sorted_gpu_ref[i]) {
+            is_correct_thrust = false;
+            std::cout << "Thrust sort mismatch at index " << i << ": "
+                      << "CPU (B, A) = (" << B_sorted_cpu[i] << ", " << A_sorted_cpu[i] << "), "
+                      << "GPU Thrust (B, A) = (" << B_sorted_gpu_ref[i] << ", " << A_sorted_gpu_ref[i] << ")\n";
+            break;
+        }
+    }
+
+    if (is_correct_thrust) {
+        std::cout << "Verification passed: CPU and GPU Thrust sort results match.\n";
+    } else {
+        std::cout << "Verification failed: CPU and GPU Thrust sort results do not match.\n";
     }
 
     return 0;
