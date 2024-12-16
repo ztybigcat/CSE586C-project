@@ -1,5 +1,6 @@
 #include "gpu_radix_sorter.h"
 
+// Device function to get digit from key
 __device__ __forceinline__ int getDigit(int key, int bitOffset) {
     return (key >> bitOffset) & (RADIX - 1);
 }
@@ -20,15 +21,12 @@ __global__ void histogramKernel(const int *keys, int *globalHist, int *blockHist
     }
     __syncthreads();
 
-    // Write localHist to globalHist
     for (int i = threadIdx.x; i < RADIX; i += blockDim.x) {
         int val = localHist[i];
         atomicAdd(&globalHist[i], val);
-        // Also store in block-specific histogram
         blockHist[blockIdx.x * RADIX + i] = val;
     }
 }
-
 
 // A utility device function for parallel prefix sum (scan) in a warp
 __device__ int warpInclusiveScan(int x) {
@@ -39,8 +37,8 @@ __device__ int warpInclusiveScan(int x) {
     return x;
 }
 
-// Parallel prefix sum (scan) for BLOCK_SIZE threads
-// This computes an inclusive prefix sum of an array in shared memory.
+// Parallel prefix sum (scan) for BLOCK threads (assume BLOCK is a multiple of 32)
+// This computes an inclusive prefix sum of an array in shared memory data[].
 template <int BLOCK>
 __device__ void blockPrefixSum(int *data) {
     __shared__ int temp[BLOCK];
@@ -78,6 +76,56 @@ __device__ void blockPrefixSum(int *data) {
 
     data[tid] = val;
 }
+
+// Kernel to prefix sum the global histogram (one block, RADIX <= BLOCK_SIZE)
+__global__ void prefixSumGlobalHist(int *globalHist) {
+    __shared__ int temp[RADIX];
+    int tid = threadIdx.x;
+
+    if (tid < RADIX) {
+        temp[tid] = globalHist[tid];
+    }
+    __syncthreads();
+
+    blockPrefixSum<BLOCK_SIZE>(temp);
+    __syncthreads();
+
+    if (tid < RADIX) {
+        globalHist[tid] = temp[tid];
+    }
+}
+
+// Kernel to prefix sum each digit's per-block counts.
+// grid.x = RADIX, block.x = numBlocks
+// Each block handles prefix sums for one digit across all histogram blocks.
+__global__ void prefixSumBlockHistPerDigit(const int *blockHist, int *blockDigitOffsets, const int *globalHist, int numBlocks) {
+    int d = blockIdx.x; // digit index
+    int b = threadIdx.x; // block index for that digit
+
+    __shared__ int s_data[BLOCK_SIZE];  
+    int val = 0;
+    if (b < numBlocks) {
+        val = blockHist[b * RADIX + d];
+    }
+    s_data[b] = val;
+    __syncthreads();
+
+    blockPrefixSum<BLOCK_SIZE>(s_data);
+    __syncthreads();
+
+    // globalHist is prefix sums of counts. globalHist[d-1] is the start offset for digit d,
+    // if d > 0, else 0 if d=0.
+    int baseOffset = (d == 0) ? 0 : globalHist[d-1];
+
+    // s_data[b] is inclusive prefix. For the offset for block b, we want the position before block b's data:
+    // That means we use s_data[b-1] if b > 0 else 0.
+    int prevSum = (b == 0) ? 0 : s_data[b-1];
+
+    if (b < numBlocks) {
+        blockDigitOffsets[b * RADIX + d] = baseOffset + prevSum;
+    }
+}
+
 __global__ void reorderKernel_stable(
     const int *keys_in, const int *values_in,
     int *keys_out, int *values_out,
@@ -94,12 +142,12 @@ __global__ void reorderKernel_stable(
         value = values_in[idx];
         d = getDigit(key, bitOffset);
     } else {
-        // For threads outside range, set digit to -1
-        // so they don't contribute
         d = -1;
     }
     threadDigits[threadIdx.x] = d;
     __syncthreads();
+
+    // Compute local rank
     int localRank = 0;
     if (d != -1) {
         for (int i = 0; i <= threadIdx.x; i++) {
@@ -109,7 +157,6 @@ __global__ void reorderKernel_stable(
 
     __syncthreads();
 
-    // Now, blockDigitOffsets[blockIdx.x * RADIX + d] gives the start offset for digit d in this block.
     if (idx < n) {
         int pos = blockDigitOffsets[blockIdx.x * RADIX + d] + (localRank - 1);
         keys_out[pos] = key;
@@ -117,7 +164,7 @@ __global__ void reorderKernel_stable(
     }
 }
 
-
+// The main sorting function
 void sortDataGPU_radix(const std::vector<int> &A, const std::vector<int> &B,
                        std::vector<int> &A_sorted, std::vector<int> &B_sorted)
 {
@@ -142,7 +189,7 @@ void sortDataGPU_radix(const std::vector<int> &A, const std::vector<int> &B,
     CUDA_CHECK(cudaMalloc(&d_histograms, RADIX * sizeof(int)));
     CUDA_CHECK(cudaMalloc(&d_blockHist, numBlocks * RADIX * sizeof(int)));
 
-    int numBits = (int)sizeof(int)*8;
+    int numBits = (int)(sizeof(int)*8);
     int numPasses = (numBits + RADIX_BITS - 1) / RADIX_BITS;
 
     for (int pass = 0; pass < numPasses; ++pass) {
@@ -151,48 +198,26 @@ void sortDataGPU_radix(const std::vector<int> &A, const std::vector<int> &B,
         CUDA_CHECK(cudaMemset(d_histograms, 0, RADIX * sizeof(int)));
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        // Compute histogram and per-block hist
+        // Compute histogram
         histogramKernel<<<numBlocks, BLOCK_SIZE>>>(d_keys_in, d_histograms, d_blockHist, (int)N, bitOffset);
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        // Copy histograms back to host
-        std::vector<int> h_globalHistogram(RADIX);
-        CUDA_CHECK(cudaMemcpy(h_globalHistogram.data(), d_histograms, RADIX * sizeof(int), cudaMemcpyDeviceToHost));
+        // Prefix sum global histogram
+        prefixSumGlobalHist<<<1, BLOCK_SIZE>>>(d_histograms);
         CUDA_CHECK(cudaDeviceSynchronize());
-
-        std::vector<int> h_blockHist(numBlocks * RADIX);
-        CUDA_CHECK(cudaMemcpy(h_blockHist.data(), d_blockHist, numBlocks * RADIX * sizeof(int), cudaMemcpyDeviceToHost));
-        CUDA_CHECK(cudaDeviceSynchronize());
-
-        // Compute global prefix sums (digitOffsets)
-        std::vector<int> h_digitOffsets(RADIX);
-        int total = 0;
-        for (int i = 0; i < RADIX; ++i) {
-            h_digitOffsets[i] = total;
-            total += h_globalHistogram[i];
-        }
-
-        // Now compute per-block prefix sums for each digit.
-        // This gives blockDigitOffsets: For block b and digit d,
-        // blockDigitOffsets[b * RADIX + d] = h_digitOffsets[d] + sum_of_this_digit_in_all_previous_blocks < b.
-        std::vector<int> h_blockDigitOffsets(numBlocks * RADIX);
-        for (int d = 0; d < RADIX; d++) {
-            int running = h_digitOffsets[d];
-            for (int b = 0; b < numBlocks; b++) {
-                h_blockDigitOffsets[b * RADIX + d] = running;
-                running += h_blockHist[b * RADIX + d];
-            }
-        }
 
         int *d_blockDigitOffsets;
         CUDA_CHECK(cudaMalloc(&d_blockDigitOffsets, numBlocks * RADIX * sizeof(int)));
-        CUDA_CHECK(cudaMemcpy(d_blockDigitOffsets, h_blockDigitOffsets.data(), numBlocks * RADIX * sizeof(int), cudaMemcpyHostToDevice));
+
+        // Prefix sum per-digit block histograms
+        // We launch RADIX blocks, each block has BLOCK_SIZE threads
+        // Assuming numBlocks <= BLOCK_SIZE for simplicity.
+        prefixSumBlockHistPerDigit<<<RADIX, BLOCK_SIZE>>>(d_blockHist, d_blockDigitOffsets, d_histograms, numBlocks);
         CUDA_CHECK(cudaDeviceSynchronize());
 
-        reorderKernel_stable<<<numBlocks, BLOCK_SIZE>>>(
-            d_keys_in, d_values_in, d_keys_out, d_values_out,
-            d_blockDigitOffsets, (int)N, bitOffset
-        );
+        // Reorder
+        reorderKernel_stable<<<numBlocks, BLOCK_SIZE>>>(d_keys_in, d_values_in, d_keys_out, d_values_out,
+                                                        d_blockDigitOffsets, (int)N, bitOffset);
         CUDA_CHECK(cudaDeviceSynchronize());
 
         CUDA_CHECK(cudaFree(d_blockDigitOffsets));

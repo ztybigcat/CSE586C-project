@@ -19,7 +19,7 @@
         }                                                                        \
     }
 
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 1024
 #define RADIX_BITS 8
 #define RADIX (1 << RADIX_BITS)
 
