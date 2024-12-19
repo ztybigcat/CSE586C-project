@@ -39,7 +39,9 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
 int main() {
     // Size of the arrays
+
     const std::uint64_t N = 64; // 1 million elements
+
 
     // Generate test data
     std::vector<int> A;
@@ -112,7 +114,7 @@ int main() {
 
     // Output first 10 sorted elements from GPU radix sorter
     std::cout << "\nFirst 10 sorted elements from GPU radix sorter:\n";
-    for (std::uint64_t i = 0; i < N; ++i) {
+    for (std::uint64_t i = 0; i < 10; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_radix[i]
                   << ", A[" << i << "] = " << A_sorted_radix[i] << "\n";
     }
