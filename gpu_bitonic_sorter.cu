@@ -1,37 +1,18 @@
-#include "gpu_custom_sorter.h"
-#include <cuda_runtime.h>
-#include <iostream>
-#include <cstdint>
-#include <algorithm>
-#include <cmath>
-#include <climits> // For INT_MAX
+// gpu_bitonic_sorter.cu
+#include "gpu_bitonic_sorter.h"
 
-// Error checking macro
-#define CUDA_CHECK(call)                                                         \
-    {                                                                            \
-        cudaError_t err = call;                                                  \
-        if (err != cudaSuccess) {                                                \
-            std::cerr << "CUDA Error: " << cudaGetErrorString(err)               \
-                      << " at " << __FILE__ << ":" << __LINE__ << std::endl;     \
-            exit(EXIT_FAILURE);                                                  \
-        }                                                                        \
-    }
-
-// Define block size for kernels
-#define BLOCK_SIZE 256
-
-// Function prototypes
+// Function prototypes for kernels
 __global__ void bitonicSortKernel(int* d_keys, int* d_values, int N, int stage, int passOfStage);
 __global__ void bitonicSortKernelShared(int* d_keys, int* d_values, int N, int stage, int passOfStage);
 
-// Old GPU sorter using global memory
-void sortDataGPU_custom_old(const std::vector<int>& A, const std::vector<int>& B,
-                        std::vector<int>& A_sorted, std::vector<int>& B_sorted) {
+// Bitonic Sort using global memory
+void sortDataGPU_bitonic(const std::vector<int>& A, const std::vector<int>& B,
+                         std::vector<int>& A_sorted, std::vector<int>& B_sorted) {
     std::uint64_t N = A.size();
 
     // Find the next power of two
     int log2N = std::ceil(std::log2(N));
-    std::uint64_t N_padded = 1 << log2N;
+    std::uint64_t N_padded = 1ULL << log2N;
 
     // Create padded arrays
     std::vector<int> A_padded = A;
@@ -86,14 +67,14 @@ void sortDataGPU_custom_old(const std::vector<int>& A, const std::vector<int>& B
     CUDA_CHECK(cudaFree(d_values));
 }
 
-// New GPU sorter with shared memory optimization
-void sortDataGPU_custom(const std::vector<int>& A, const std::vector<int>& B,
-                        std::vector<int>& A_sorted, std::vector<int>& B_sorted) {
+// Bitonic Sort with shared memory optimization
+void sortDataGPU_bitonic_shared_memory(const std::vector<int>& A, const std::vector<int>& B,
+                                       std::vector<int>& A_sorted, std::vector<int>& B_sorted) {
     std::uint64_t N = A.size();
 
     // Find the next power of two
     int log2N = std::ceil(std::log2(N));
-    std::uint64_t N_padded = 1 << log2N;
+    std::uint64_t N_padded = 1ULL << log2N;
 
     // Create padded arrays
     std::vector<int> A_padded = A;
@@ -148,7 +129,7 @@ void sortDataGPU_custom(const std::vector<int>& A, const std::vector<int>& B,
     CUDA_CHECK(cudaFree(d_values));
 }
 
-// Original Bitonic Sort Kernel
+// Bitonic Sort Kernel
 __global__ void bitonicSortKernel(int* d_keys, int* d_values, int N, int stage, int passOfStage) {
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N) return;
