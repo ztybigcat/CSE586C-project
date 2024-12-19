@@ -1,13 +1,13 @@
-# Makefile for compiling the sorting program
+## Makefile for compiling the sorting program
 
 # Compiler
 NVCC = nvcc
 
 # Compiler flags
-CXXFLAGS = -std=c++11 -O2
+CXXFLAGS = -std=c++14 -O2
 
 # Compute capability
-ARCH_FLAGS = -arch=sm_89
+ARCH_FLAGS = -arch=sm_70
 
 SRC = main.cpp data_generator.cpp cpu_sorter.cpp \
       gpu_reference_sorter.cu gpu_bitonic_sorter.cu \
@@ -43,4 +43,7 @@ clean:
 	rm -f $(EXEC) $(TEST_EXEC)
 
 # Phony targets
+# Phony targets
+.PHONY: all clean
+
 .PHONY: all clean test

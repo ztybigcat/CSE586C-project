@@ -23,11 +23,11 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
     // Call the GPU sorting function
     gpu_sort_function(A, B, A_sorted, B_sorted);
-
+    cudaDeviceSynchronize();
     // Stop timing
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
-
+    
     float milliseconds = 0;
     cudaEventElapsedTime(&milliseconds, start, stop);
 
@@ -39,7 +39,9 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 
 int main() {
     // Size of the arrays
-    const std::uint64_t N = 5e8; // 1 million elements
+
+    const std::uint64_t N = 64; // 1 million elements
+
 
     // Generate test data
     std::vector<int> A;
@@ -59,6 +61,9 @@ int main() {
     std::vector<int> A_sorted_bitonic_shared;
     std::vector<int> B_sorted_bitonic_shared;
 
+    std::vector<int> A_sorted_bitonic_Hybrid;
+    std::vector<int> B_sorted_bitonic_Hybrid;
+
     std::vector<int> A_sorted_radix;
     std::vector<int> B_sorted_radix;
 
@@ -76,9 +81,12 @@ int main() {
     float bitonic_gpu_time = timeGPUExecution(sortDataGPU_bitonic, A, B, A_sorted_bitonic, B_sorted_bitonic);
     std::cout << "GPU bitonic sorting completed in " << bitonic_gpu_time << " ms.\n";
 
-    // GPU bitonic sorting with shared memory optimization
+    //GPU bitonic sorting with shared memory optimization
     float bitonic_shared_gpu_time = timeGPUExecution(sortDataGPU_bitonic_shared_memory, A, B, A_sorted_bitonic_shared, B_sorted_bitonic_shared);
     std::cout << "GPU bitonic sorting with shared memory completed in " << bitonic_shared_gpu_time << " ms.\n";
+
+    float bitonic_hybrid_gpu_time = timeGPUExecution(sortDataGPU_bitonic_Hybrid, A, B, A_sorted_bitonic_Hybrid, B_sorted_bitonic_Hybrid);
+    std::cout << "GPU bitonic sorting with hybrid approach completed in " << bitonic_hybrid_gpu_time << " ms.\n";
 
     // GPU radix sorting
     float radix_gpu_time = timeGPUExecution(sortDataGPU_radix, A, B, A_sorted_radix, B_sorted_radix);
@@ -91,11 +99,17 @@ int main() {
                   << ", A[" << i << "] = " << A_sorted_cpu[i] << "\n";
     }
 
-    // Output first 10 sorted elements from shared memory bitonic sorter
+    //Output first 10 sorted elements from shared memory bitonic sorter
     std::cout << "\nFirst 10 sorted elements from shared memory bitonic sorter:\n";
     for (std::uint64_t i = 0; i < 10; ++i) {
         std::cout << "B[" << i << "] = " << B_sorted_bitonic_shared[i]
                   << ", A[" << i << "] = " << A_sorted_bitonic_shared[i] << "\n";
+    }
+
+    std::cout << "\nFirst 10 sorted elements from Hybrid bitonic sorter:\n";
+    for (std::uint64_t i = 0; i < 10; ++i) {
+        std::cout << "B[" << i << "] = " << B_sorted_bitonic_Hybrid[i]
+                  << ", A[" << i << "] = " << A_sorted_bitonic_Hybrid[i] << "\n";
     }
 
     // Output first 10 sorted elements from GPU radix sorter
@@ -179,3 +193,4 @@ int main() {
 
     return 0;
 }
+
