@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cuda_runtime.h>
-
+#include <chrono>
 #include "data_generator.h"
 #include "cpu_sorter.h"
 #include "gpu_reference_sorter.h"
@@ -40,7 +40,7 @@ float timeGPUExecution(void (*gpu_sort_function)(const std::vector<int>&, const 
 int main() {
     // Size of the arrays
 
-    const std::uint64_t N = 64; // 1 million elements
+    const std::uint64_t N = 10000000; // 1 million elements
 
 
     // Generate test data
@@ -67,10 +67,14 @@ int main() {
     std::vector<int> A_sorted_radix;
     std::vector<int> B_sorted_radix;
 
-    // Perform CPU sorting
+    // Perform CPU sorting and time it
     std::cout << "Starting CPU sorting..." << std::endl;
+    auto cpu_start = std::chrono::high_resolution_clock::now();
     sortDataCPU(A, B, A_sorted_cpu, B_sorted_cpu);
-    std::cout << "CPU sorting completed." << std::endl;
+    auto cpu_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> cpu_elapsed = cpu_end - cpu_start;
+    std::cout << "CPU sorting completed in " << cpu_elapsed.count() << " ms." << std::endl;
+
 
     // Perform GPU Thrust sorting
     std::cout << "Starting GPU Thrust sorting..." << std::endl;
@@ -92,32 +96,32 @@ int main() {
     float radix_gpu_time = timeGPUExecution(sortDataGPU_radix, A, B, A_sorted_radix, B_sorted_radix);
     std::cout << "GPU radix sorting completed in " << radix_gpu_time << " ms.\n";
 
-    // Output first 10 sorted elements for verification
-    std::cout << "\nFirst 10 sorted elements from CPU:\n";
-    for (std::uint64_t i = 0; i < 10; ++i) {
-        std::cout << "B[" << i << "] = " << B_sorted_cpu[i]
-                  << ", A[" << i << "] = " << A_sorted_cpu[i] << "\n";
-    }
+    // // Output first 10 sorted elements for verification
+    // std::cout << "\nFirst 10 sorted elements from CPU:\n";
+    // for (std::uint64_t i = 0; i < 10; ++i) {
+    //     std::cout << "B[" << i << "] = " << B_sorted_cpu[i]
+    //               << ", A[" << i << "] = " << A_sorted_cpu[i] << "\n";
+    // }
 
-    //Output first 10 sorted elements from shared memory bitonic sorter
-    std::cout << "\nFirst 10 sorted elements from shared memory bitonic sorter:\n";
-    for (std::uint64_t i = 0; i < 10; ++i) {
-        std::cout << "B[" << i << "] = " << B_sorted_bitonic_shared[i]
-                  << ", A[" << i << "] = " << A_sorted_bitonic_shared[i] << "\n";
-    }
+    // //Output first 10 sorted elements from shared memory bitonic sorter
+    // std::cout << "\nFirst 10 sorted elements from shared memory bitonic sorter:\n";
+    // for (std::uint64_t i = 0; i < 10; ++i) {
+    //     std::cout << "B[" << i << "] = " << B_sorted_bitonic_shared[i]
+    //               << ", A[" << i << "] = " << A_sorted_bitonic_shared[i] << "\n";
+    // }
 
-    std::cout << "\nFirst 10 sorted elements from Hybrid bitonic sorter:\n";
-    for (std::uint64_t i = 0; i < 10; ++i) {
-        std::cout << "B[" << i << "] = " << B_sorted_bitonic_Hybrid[i]
-                  << ", A[" << i << "] = " << A_sorted_bitonic_Hybrid[i] << "\n";
-    }
+    // std::cout << "\nFirst 10 sorted elements from Hybrid bitonic sorter:\n";
+    // for (std::uint64_t i = 0; i < 10; ++i) {
+    //     std::cout << "B[" << i << "] = " << B_sorted_bitonic_Hybrid[i]
+    //               << ", A[" << i << "] = " << A_sorted_bitonic_Hybrid[i] << "\n";
+    // }
 
-    // Output first 10 sorted elements from GPU radix sorter
-    std::cout << "\nFirst 10 sorted elements from GPU radix sorter:\n";
-    for (std::uint64_t i = 0; i < 10; ++i) {
-        std::cout << "B[" << i << "] = " << B_sorted_radix[i]
-                  << ", A[" << i << "] = " << A_sorted_radix[i] << "\n";
-    }
+    // // Output first 10 sorted elements from GPU radix sorter
+    // std::cout << "\nFirst 10 sorted elements from GPU radix sorter:\n";
+    // for (std::uint64_t i = 0; i < 10; ++i) {
+    //     std::cout << "B[" << i << "] = " << B_sorted_radix[i]
+    //               << ", A[" << i << "] = " << A_sorted_radix[i] << "\n";
+    // }
 
     // Verify that the CPU and GPU radix sort results are the same
     bool is_correct_radix = true;

@@ -7,7 +7,7 @@ NVCC = nvcc
 CXXFLAGS = -std=c++14 -O2
 
 # Compute capability
-ARCH_FLAGS = -arch=sm_70
+ARCH_FLAGS = -arch=sm_89
 
 SRC = main.cpp data_generator.cpp cpu_sorter.cpp \
       gpu_reference_sorter.cu gpu_bitonic_sorter.cu \
